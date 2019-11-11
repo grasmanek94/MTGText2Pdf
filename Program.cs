@@ -7,6 +7,8 @@ using System.Net;
 using XZ.NET;
 using PdfSharp.Pdf;
 using PdfSharp.Drawing;
+using ImageResizer;
+using System.Configuration;
 
 namespace MTGText2Pdf
 {
@@ -308,51 +310,14 @@ namespace MTGText2Pdf
             Console.WriteLine(" ");
         }
 
-        private static void GeneratePDF_()
-        {
-            PdfDocument document = new PdfDocument();
-
-            PdfPage page = document.AddPage();
-            XGraphics gfx = XGraphics.FromPdfPage(page);
-
-            ImageAble card = null;
-            foreach (var entry in imaged_cards.cards)
-            {
-                card = entry.Key;
-                break;
-            }
-        
-            XImage img = XImage.FromFile(card.GetCachedImage());
-            
-            double a4_width = 210.0;
-            double a4_height = 297.0;
-
-            double w_factor = gfx.PageSize.Width;
-            double h_factor = gfx.PageSize.Height;
-
-            double x = 20.0 / a4_width * w_factor;
-            double y = 13.5 / a4_height * h_factor;
-            double w = 85.0 / a4_width * w_factor;
-            double h = 54.0 / a4_height * h_factor;
-
-            var state = gfx.Save();
-            gfx.RotateAtTransform(-90.0, new XPoint(x, y));
-            gfx.TranslateTransform(-x * 2.0, y);
-            gfx.DrawImage(img, 0, 0, h, w);
-            gfx.Restore(state);
-
-            state = gfx.Save();
-            gfx.RotateAtTransform(-90.0, new XPoint(x, y));
-            gfx.TranslateTransform(-x * 2.0, y + w);
-            gfx.DrawImage(img, 0, 0, h, w);
-            gfx.Restore(state);
-
-            document.Save("cards.pdf");
-        }
-
         private static void GeneratePDF()
         {
             PdfDocument document = new PdfDocument();
+            document.Options.FlateEncodeMode = PdfFlateEncodeMode.BestCompression;
+            document.Options.UseFlateDecoderForJpegImages = PdfUseFlateDecoderForJpegImages.Automatic;
+            document.Options.NoCompression = false;
+
+            document.Options.CompressContentStreams = true;
 
             int current_images = 0;
             int progress = 0;
@@ -360,6 +325,23 @@ namespace MTGText2Pdf
 
             PdfPage page = document.AddPage();
             XGraphics gfx = XGraphics.FromPdfPage(page);
+
+            bool enable_compression = bool.Parse(ConfigurationManager.AppSettings["enableCompression"]);
+
+            ResizeSettings settings = new ResizeSettings();
+            settings.Format = "jpg";
+
+            int maxHeight = int.Parse(ConfigurationManager.AppSettings["maxHeight"]);
+            if (maxHeight > 0)
+            {
+                settings.MaxHeight = maxHeight;
+            }
+
+            int quality = int.Parse(ConfigurationManager.AppSettings["imageQuality"]);
+            if (quality > 0 && quality <= 100)
+            {
+                settings.Quality = quality;
+            }
 
             foreach (var entry in imaged_cards.cards)
             {
@@ -369,8 +351,18 @@ namespace MTGText2Pdf
 
                 for (int i = 0; i < entry.Value; ++i)
                 {
+                    XImage img;
 
-                    XImage img = XImage.FromFile(entry.Key.GetCachedImage());
+                    if (enable_compression)
+                    {
+                        MemoryStream stream = new MemoryStream();
+                        ImageBuilder.Current.Build(entry.Key.GetCachedImage(), stream, settings);
+                        img = XImage.FromStream(stream);
+                    }
+                    else
+                    {
+                        img = XImage.FromFile(entry.Key.GetCachedImage());
+                    }
 
                     double a4_width = 210.0;
                     double a4_height = 297.0;
@@ -414,8 +406,9 @@ namespace MTGText2Pdf
                 Console.Write("\tProgress: [" + progress.ToString() + "/" + max.ToString() + "]");
 
             }
+            Console.WriteLine(" ");
 
-            document.Save("cards.pdf");
+           document.Save("cards.pdf");
         }
 
         static string GetSteps()
