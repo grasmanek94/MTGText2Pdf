@@ -313,11 +313,17 @@ namespace MTGText2Pdf
         private static void GeneratePDF()
         {
             PdfDocument document = new PdfDocument();
-            document.Options.FlateEncodeMode = PdfFlateEncodeMode.BestCompression;
-            document.Options.UseFlateDecoderForJpegImages = PdfUseFlateDecoderForJpegImages.Automatic;
-            document.Options.NoCompression = false;
 
-            document.Options.CompressContentStreams = true;
+            bool enable_pdf_compression = bool.Parse(ConfigurationManager.AppSettings["enablePDFCompression"]);
+
+            if (enable_pdf_compression)
+            {
+                document.Options.FlateEncodeMode = PdfFlateEncodeMode.BestCompression;
+                document.Options.UseFlateDecoderForJpegImages = PdfUseFlateDecoderForJpegImages.Automatic;
+                document.Options.NoCompression = false;
+
+                document.Options.CompressContentStreams = true;
+            }
 
             int current_images = 0;
             int progress = 0;
@@ -326,10 +332,31 @@ namespace MTGText2Pdf
             PdfPage page = document.AddPage();
             XGraphics gfx = XGraphics.FromPdfPage(page);
 
-            bool enable_compression = bool.Parse(ConfigurationManager.AppSettings["enableCompression"]);
+            bool enable_compression = bool.Parse(ConfigurationManager.AppSettings["enableImageCompression"]);
 
             ResizeSettings settings = new ResizeSettings();
-            settings.Format = "jpg";
+
+            string compressionFormat = ConfigurationManager.AppSettings["compressionFormat"];
+
+            switch (compressionFormat)
+            {
+                case "png":
+                case "jpg":
+                case "gif":
+                    settings.Format = compressionFormat;
+                    break;
+
+                case ".png":
+                case ".jpg":
+                case ".gif":
+                    settings.Format = compressionFormat.Substring(1);
+                    break;
+
+                case "jpeg":
+                case ".jpeg":
+                    settings.Format = "jpg";
+                    break;
+            }
 
             int maxHeight = int.Parse(ConfigurationManager.AppSettings["maxHeight"]);
             if (maxHeight > 0)
